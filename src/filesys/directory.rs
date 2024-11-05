@@ -46,6 +46,15 @@ impl<'a> Dir<'a> {
     Dir::init(inodes.open_inode(ROOT_INODE, disk))
   }
 
+  pub fn open_path(
+    inodes: &'a mut InodeManager,
+    disk: &mut BlockDevice,
+    _path: &str,
+  ) -> Option<Self> {
+    // Until nested directories are implemented, we pretend the path is always the root
+    Some(Dir::open_root(inodes, disk))
+  }
+
   fn _close(self, inodes: &mut InodeManager) {
     inodes.close(self.inode);
   }
@@ -161,5 +170,29 @@ impl<'a> Dir<'a> {
     );
 
     true
+  }
+
+  pub fn list(&self, disk: &mut BlockDevice) -> Vec<String> {
+    let mut files: Vec<String> = Vec::new();
+
+    let mut start: Ofs = 0;
+    let inode = self.inode.borrow();
+
+    while start as usize + std::mem::size_of::<DirEntry>() <= inode.length() as usize {
+      let mut raw = [0; std::mem::size_of::<DirEntry>()];
+      inode.borrow().read_at(&mut raw, start, disk);
+
+      let entry: DirEntry = unsafe { std::mem::transmute(raw) };
+
+      if entry.in_use {
+        let terminator = entry.name.iter().position(|&x| x == b'\0').expect("not null-terminated");
+        let filename = String::from_utf8(entry.name[..terminator].to_vec()).expect("non-ascii character found");
+        files.push(filename);
+      }
+
+      start += std::mem::size_of::<DirEntry>() as Ofs;
+    }
+
+    files
   }
 }
