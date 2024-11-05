@@ -22,6 +22,10 @@ fn main() {
     let success = FILESYS.create_file("a.txt", SAMPLE_DATA.len() as u64);
     assert!(success);
 
+    /* We should see the file listed */
+    let files = FILESYS.list("/").expect("directory exists");
+    assert!(files.contains(&String::from("a.txt")));
+
     /* Open a handle to the file and write contents */
     let mut file = FILESYS.open_file("a.txt").expect("couldn't open file");
 
