@@ -80,9 +80,11 @@ impl<'a> Filesys<'a> {
     );
     let inumber = inode.borrow().inumber();
 
-    let mut dir = Dir::open_root(&mut self.inodes, disk);
-
-    dir.add(path, inumber, self.free_map.as_mut().expect("msg"), disk)
+    if let Some(mut dir) = Dir::open_path(&mut self.inodes, disk, path) {
+      dir.add(path, inumber, self.free_map.as_mut().expect("msg"), disk)
+    } else {
+      false
+    }
   }
 
   pub fn open_file(&'a mut self, path: &str) -> Option<VFile<'a>> {
@@ -91,7 +93,7 @@ impl<'a> Filesys<'a> {
       .get_by_role(DeviceType::Disk)
       .expect("no disk found");
 
-    let dir = Dir::open_root(&mut self.inodes, disk);
+    let dir = Dir::open_path(&mut self.inodes, disk, path)?;
     dir
       .open_file(path, disk)
       .map(|i| VFile::open(self.inodes.open_inode(i, disk)))
@@ -117,6 +119,16 @@ impl<'a> Filesys<'a> {
 
   pub fn _remove_file(&mut self, _path: &str) -> bool {
     todo!()
+  }
+
+  pub fn list(&'a mut self, path: &str) -> Option<Vec<String>> {
+    let disk = self
+      .block_devs
+      .get_by_role(DeviceType::Disk)
+      .expect("no disk found");
+
+    let dir = Dir::open_path(&mut self.inodes, disk, path)?;
+    Some(dir.list(disk))
   }
 
   pub fn display_disk_stats(&'a mut self) {
