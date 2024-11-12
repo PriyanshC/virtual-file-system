@@ -23,14 +23,19 @@ pub struct Filesys<'a> {
 const ROOT_INODE: Size = 0;
 const FREE_MAP_INODE: Size = 1;
 
-impl<'a> Filesys<'a> {
-  pub const fn init() -> Self {
-    let inodes = InodeManager::init();
-    let block_devs = BlockManager::init();
+const NO_DISK_ERR: &str = "disk not found";
+const NO_FREE_MAP_ERR: &str = "free map not initialised";
 
+impl<'a> Filesys<'a> {
+  
+  /*
+    Initialisation
+  */
+
+  pub const fn init() -> Self {
     Filesys {
-      inodes,
-      block_devs,
+      inodes: InodeManager::init(),
+      block_devs: BlockManager::init(),
       free_map: None,
     }
   }
@@ -43,11 +48,21 @@ impl<'a> Filesys<'a> {
       .register("DISK", disk_block_count, vdisk, DeviceType::Disk);
   }
 
+  pub fn load_disk(&'a mut self, host_path: &str) {
+    let (vdisk, disk_block_count) = VDisk::identify(host_path);
+
+    self
+      .block_devs
+      .register("DISK", disk_block_count, vdisk, DeviceType::Disk);
+
+    todo!("ensure free map reads from disk")
+  }
+
   pub fn init_free_map(&'a mut self) {
     let disk = self
       .block_devs
       .get_by_role(DeviceType::Disk)
-      .expect("no disk found");
+      .expect(NO_DISK_ERR);
 
     let block_count = disk.max_size();
 
@@ -57,31 +72,26 @@ impl<'a> Filesys<'a> {
     self.free_map = Some(FreeMap::init(file, block_count));
   }
 
-  pub fn load_disk(&'a mut self, host_path: &str) {
-    let (vdisk, disk_block_count) = VDisk::identify(host_path);
-
-    self
-      .block_devs
-      .register("DISK", disk_block_count, vdisk, DeviceType::Disk);
-
-    todo!()
-  }
+  /*
+    File operations
+  */
 
   pub fn create_file(&'a mut self, path: &str, length: Size) -> bool {
     let disk = self
       .block_devs
       .get_by_role(DeviceType::Disk)
-      .expect("no disk found");
+      .expect(NO_DISK_ERR);
 
-    let inode = self.inodes.borrow_mut().create_inode(
-      length,
-      disk,
-      self.free_map.as_mut().expect("free map not initialised"),
-    );
+    let free_map = self.free_map.as_mut().expect(NO_FREE_MAP_ERR);
+
+    let inode = self
+      .inodes
+      .borrow_mut()
+      .create_inode(length, disk, free_map);
     let inumber = inode.borrow().inumber();
 
     if let Some(mut dir) = Dir::open_path(&mut self.inodes, disk, path) {
-      dir.add(path, inumber, self.free_map.as_mut().expect("msg"), disk)
+      dir.add(path, inumber, free_map, disk)
     } else {
       false
     }
@@ -91,7 +101,7 @@ impl<'a> Filesys<'a> {
     let disk = self
       .block_devs
       .get_by_role(DeviceType::Disk)
-      .expect("no disk found");
+      .expect(NO_DISK_ERR);
 
     let dir = Dir::open_path(&mut self.inodes, disk, path)?;
     dir
@@ -103,7 +113,7 @@ impl<'a> Filesys<'a> {
     let disk = self
       .block_devs
       .get_by_role(DeviceType::Disk)
-      .expect("no disk found");
+      .expect(NO_DISK_ERR);
 
     file.read(buffer, offset, disk)
   }
@@ -112,7 +122,7 @@ impl<'a> Filesys<'a> {
     let disk = self
       .block_devs
       .get_by_role(DeviceType::Disk)
-      .expect("no disk found");
+      .expect(NO_DISK_ERR);
 
     file.write(buffer, offset, disk)
   }
@@ -121,22 +131,30 @@ impl<'a> Filesys<'a> {
     todo!()
   }
 
+  /*
+    Directory operations
+  */
+
   pub fn list(&'a mut self, path: &str) -> Option<Vec<String>> {
     let disk = self
       .block_devs
       .get_by_role(DeviceType::Disk)
-      .expect("no disk found");
+      .expect(NO_DISK_ERR);
 
     let dir = Dir::open_path(&mut self.inodes, disk, path)?;
     Some(dir.list(disk))
   }
 
+  /*
+    Misc operations
+  */
+
   pub fn display_disk_stats(&'a mut self) {
     let disk = self
       .block_devs
       .get_by_role(DeviceType::Disk)
-      .expect("no disk found");
-    
+      .expect(NO_DISK_ERR);
+
     println!("{}", disk);
   }
 }

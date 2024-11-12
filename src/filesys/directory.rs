@@ -15,6 +15,8 @@ use super::{
 pub const NAME_MAX: usize = 15;
 type FileName = [u8; NAME_MAX + 1]; /* Null-terminated */
 
+const NON_ASCII_ERR: &str = "encountered non-ascii character";
+
 pub struct Dir<'a> {
   inode: RefCell<&'a mut Inode>,
 }
@@ -68,7 +70,7 @@ impl<'a> Dir<'a> {
 
     let mut name = [b'\0'; NAME_MAX + 1];
     for (i, c) in path.chars().enumerate() {
-      name[i] = c.try_into().expect("non-ascii character");
+      name[i] = c.try_into().expect(NON_ASCII_ERR);
     }
 
     let mut start: Ofs = 0;
@@ -110,8 +112,9 @@ impl<'a> Dir<'a> {
   ) -> bool {
     let mut name = [b'\0'; NAME_MAX + 1];
     for (i, c) in path.chars().enumerate() {
-      name[i] = c.try_into().expect("non-ascii character");
+      name[i] = c.try_into().expect(NON_ASCII_ERR);
     }
+    
     {
       let inode = self.inode.borrow();
 
@@ -185,8 +188,12 @@ impl<'a> Dir<'a> {
       let entry: DirEntry = unsafe { std::mem::transmute(raw) };
 
       if entry.in_use {
-        let terminator = entry.name.iter().position(|&x| x == b'\0').expect("not null-terminated");
-        let filename = String::from_utf8(entry.name[..terminator].to_vec()).expect("non-ascii character found");
+        let terminator = entry
+          .name
+          .iter()
+          .position(|&x| x == b'\0')
+          .expect("not null-terminated");
+        let filename = String::from_utf8(entry.name[..terminator].to_vec()).expect(NON_ASCII_ERR);
         files.push(filename);
       }
 

@@ -44,7 +44,8 @@ impl<'a> FreeMap<'a> {
     }
   }
 
-  fn _release(&self, _block: Size) {
-    todo!()
+  fn _release(&mut self, block: Size) {
+    assert!(!self.bitmap.test(block));
+    self.bitmap.reset(block);
   }
 }

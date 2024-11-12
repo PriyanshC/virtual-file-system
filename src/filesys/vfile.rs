@@ -21,6 +21,7 @@ impl<'a> VFile<'a> {
     inodes.close(self.inode);
   }
 
+  /* Read is deferred to inode, seek head is moved */
   pub fn read(&mut self, buffer: &mut [u8], offset: Ofs, disk: &mut BlockDevice) -> Ofs {
     let bytes_read = self
       .inode
@@ -31,6 +32,7 @@ impl<'a> VFile<'a> {
     bytes_read
   }
 
+  /* Write is deferred to inode, seek head is moved */
   pub fn write(&mut self, buffer: &[u8], offset: Ofs, disk: &mut BlockDevice) -> Ofs {
     let bytes_written = self
       .inode
@@ -40,6 +42,10 @@ impl<'a> VFile<'a> {
     self.seek(bytes_written);
     bytes_written
   }
+
+  /*
+    Useful functions, also public to users
+  */
 
   pub fn length(&self) -> Size {
     self.inode.borrow().length()
