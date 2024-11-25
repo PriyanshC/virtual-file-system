@@ -11,6 +11,11 @@ pub struct VDisk {
 }
 
 impl VDisk {
+
+  /*
+    Initialisation
+  */
+
   pub fn new(host_path: &str, disk_block_count: Size) -> Self {
     let host = File::options()
       .write(true)
@@ -39,37 +44,36 @@ impl VDisk {
   }
 }
 
+/*
+  Interface for I/O
+*/
+const SEEK_ERR: &str = "could not seek file";
+const READ_ERR: &str = "could not read all bytes to buffer";
+const WRITE_ERR: &str = "could not write all bytes to file";
+
 impl block::BlockOperations for VDisk {
   fn read(&mut self, buf: &mut [u8; block::BLOCK_USIZE], pos: Size) {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "debug")]
     println!("Disk reading block {}", pos);
 
-    self
-      .host
+    self.host
       .seek(std::io::SeekFrom::Start(pos * block::BLOCK_SIZE))
-      .expect("could not seek file");
-    self
-      .host
+      .expect(SEEK_ERR);
+    self.host
       .read_exact(buf)
-      .expect("could not read all bytes to buffer");
-    self.host.flush().expect("could not flush file contents");
-    self.host.sync_all().expect("could not flush file contents");
+      .expect(READ_ERR);
   }
 
   fn write(&mut self, buf: &[u8; block::BLOCK_USIZE], pos: Size) {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "debug")]
     println!("Disk writing block {}", pos);
 
-    self
-      .host
+    self.host
       .seek(std::io::SeekFrom::Start(pos * block::BLOCK_SIZE))
-      .expect("could not seek file");
-    self
-      .host
+      .expect(SEEK_ERR);
+    self.host
       .write_all(buf)
-      .expect("could not write all bytes to file");
-    self.host.flush().expect("could not flush file contents");
-    self.host.sync_all().expect("could not flush file contents");
+      .expect(WRITE_ERR);
 
     #[cfg(debug_assertions)]
     {

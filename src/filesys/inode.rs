@@ -6,15 +6,19 @@ use super::{
 };
 use crate::{Ofs, Size};
 
+/* Arbitrarily chosen value for inodes on disk. Used to detect corruption */
 const INODE_MAGIC: Size = 0x8BCEFADC;
 
+/* Reassignable constants, subject to they fit inside an inode */
 const N_DIRECT: usize = 4;
 const N_INDIRECT: usize = 1;
 const N_DOUBLY_INDIRECT: usize = 1;
 
+/*  */
 const PTRS_PER_BLOCK: usize = block::BLOCK_USIZE / std::mem::size_of::<Size>();
 type PtrBlock = [Size; PTRS_PER_BLOCK];
 
+/* Stores all inodes currently open */
 pub struct InodeManager {
   open_list: Vec<Inode>,
 }
@@ -26,7 +30,7 @@ pub struct Inode {
   data: InodeDisk,
 }
 
-/* On-disk Inode must be exactly BLOCK_SIZE bytes long */
+/* On-disk Inode. Must be exactly BLOCK_SIZE bytes long */
 #[repr(C)]
 #[derive(Clone, Debug)]
 struct InodeDisk {
@@ -39,13 +43,18 @@ struct InodeDisk {
     BLOCK_USIZE - std::mem::size_of::<Size>() * (2 + N_DIRECT + N_INDIRECT + N_DOUBLY_INDIRECT)],
 }
 
+const _: () = {
+  assert!(std::mem::size_of::<InodeDisk>() == block::BLOCK_USIZE);
+};
+
 impl InodeManager {
   pub const fn init() -> Self {
-    Self {
-      open_list: Vec::new(),
-    }
+    Self { open_list: Vec::new() }
   }
 
+  /*
+    Create a new inode on disk with allocated blocks for `length` bytes
+  */
   pub fn create_inode(
     &mut self,
     length: Size,
@@ -54,7 +63,7 @@ impl InodeManager {
   ) -> RefCell<&mut Inode> {
     assert_eq!(std::mem::size_of::<InodeDisk>(), block::BLOCK_USIZE);
 
-    let block_count = length.div_ceil(block::BLOCK_SIZE) as usize;
+    let block_count = bytes_to_blocks(length);
 
     let mut allocations: Vec<Size> = Vec::new();
     free_map.allocate(1 + block_count, &mut allocations);
@@ -70,10 +79,10 @@ impl InodeManager {
     fill_doubly_indirect(&mut skip, &mut data.indirect, &mut blocks, disk);
     data.len = length;
 
-    /* Write to disk */
+    /* Write inode to disk */
     disk.write(&data.clone().into(), inode_block);
 
-    /* Initial mem */
+    /* Initialise in-memory representation */
     let inode = Inode {
       open_count: 1,
       block: inode_block,
@@ -83,37 +92,43 @@ impl InodeManager {
     /* Push to global list */
     self.open_list.push(inode);
 
+    /* Find a reference now that the InodeManager owns it */
     let inode = self
       .open_list
       .iter_mut()
       .find(|i| i.block == inode_block)
-      .expect("2");
+      .expect("internal error: InodeManager does not contain newly added inode");
+    
     RefCell::new(inode)
   }
 
+  /* Returns a reference to an inode, opening a new one if not already open */
   pub fn open_inode(&mut self, block_num: Size, disk: &mut BlockDevice) -> RefCell<&mut Inode> {
-    let idx: usize = if let Some(i) = self.open_list.iter().position(|i| i.block == block_num) {
-      i
-    } else {
-      let mut block = block::EMPTY_BLOCK;
-      disk.read(&mut block, block_num);
-      let data: InodeDisk = unsafe { std::mem::transmute(block) };
+    let idx: usize = self.open_list
+      .iter()
+      .position(|i| i.block == block_num)
+      .unwrap_or_else(|| {
+        let mut block = block::EMPTY_BLOCK;
+        disk.read(&mut block, block_num);
 
-      let inode = Inode {
-        open_count: 0,
-        data,
-        block: block_num,
-      };
-      let i = self.open_list.len();
-      self.open_list.push(inode);
-      i
-    };
+        let data: InodeDisk = unsafe { std::mem::transmute(block) };
+
+        let inode = Inode {
+            open_count: 0,
+            data,
+            block: block_num,
+        };
+        let new_index = self.open_list.len();
+        self.open_list.push(inode);
+        new_index
+      });
 
     let inode = self.open_list.get_mut(idx).expect("msg");
     inode.incr_open();
     RefCell::new(inode)
   }
 
+  /* Decrement the open count and remove if we're the last reference */
   pub fn close(&mut self, inode_ref: RefCell<&mut Inode>) {
     let mut inode = inode_ref.borrow_mut();
     inode.decr_open();
@@ -129,6 +144,9 @@ impl InodeManager {
   }
 }
 
+/*
+  Utility functions for other methods
+*/
 impl Inode {
   pub fn length(&self) -> Size {
     self.data.len
@@ -150,12 +168,13 @@ impl Inode {
     self.open_count == 0
   }
 
+  /* Read */
   pub fn read_at(&self, buffer: &mut [u8], offset: Ofs, disk: &mut BlockDevice) -> Ofs {
     let mut size = buffer.len() as Ofs;
     let mut ofs = offset;
     let mut bytes_written: Ofs = 0;
 
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "debug")]
     println!(
       "Inode {} reading {} bytes at {}",
       self.inumber(),
@@ -204,12 +223,13 @@ impl Inode {
     bytes_written
   }
 
+  /* Write */
   pub fn write_at(&self, buffer: &[u8], offset: Ofs, disk: &mut BlockDevice) -> Ofs {
     let mut size = buffer.len() as Ofs;
     let mut ofs = offset;
     let mut bytes_written: Ofs = 0;
 
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "debug")]
     println!(
       "Inode {} writing {} bytes at {}",
       self.inumber(),
@@ -258,9 +278,10 @@ impl Inode {
     bytes_written
   }
 
+  /* Set the length of a file, allocating new blocks if needed */
   pub fn set_len(&mut self, len: Size, free_map: &mut FreeMap, disk: &mut BlockDevice) {
-    let cur_block_count = self.length().div_ceil(block::BLOCK_SIZE) as usize;
-    let req_block_count = len.div_ceil(block::BLOCK_SIZE) as usize;
+    let cur_block_count = bytes_to_blocks(self.length());
+    let req_block_count = bytes_to_blocks(len);
 
     if cur_block_count <= req_block_count {
       self.data.len = len;
@@ -281,6 +302,8 @@ impl Inode {
     disk.write(&buffer, self.inumber());
   }
 }
+
+/* Std trait implementations for type conversions and initialisation */ 
 
 impl Default for InodeDisk {
   fn default() -> Self {
@@ -445,6 +468,7 @@ fn fill_doubly_indirect(
   }
 }
 
-fn _bytes_to_blocks(bytes: Size) -> Size {
-  bytes.div_ceil(block::BLOCK_SIZE)
+/* Number of blocks needed to store `bytes` */
+fn bytes_to_blocks(bytes: Size) -> usize {
+  (bytes as usize).div_ceil(block::BLOCK_USIZE)
 }

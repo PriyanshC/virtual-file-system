@@ -13,6 +13,11 @@ pub struct VFile<'a> {
 }
 
 impl<'a> VFile<'a> {
+
+  /* 
+    Initialisation and closure
+  */
+
   pub fn open(inode: RefCell<&'a mut Inode>) -> Self {
     VFile { pos: 0, inode }
   }
@@ -44,7 +49,8 @@ impl<'a> VFile<'a> {
   }
 
   /*
-    Useful functions, also public to users
+    Utility functions
+    Public to users
   */
 
   pub fn length(&self) -> Size {
