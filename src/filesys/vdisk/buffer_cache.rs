@@ -46,7 +46,7 @@ impl ArcCacheDisk {
     if self.t1.len() >= 1 && (is_b1_hit || self.t1.len() > self.p) {
       // Evict from T1, moving it to the ghost list B1
       if let Some(pos) = self.t1.pop_back() {
-      #[cfg(feature = "debug")]
+        #[cfg(feature = "debug")]
         println!("[CACHE] Evicting {} from T1 to B1", pos);
         self.b1.push_front(pos);
         self.data_store.remove(&pos);
@@ -73,7 +73,44 @@ impl ArcCacheDisk {
 
 impl block::BlockOperations for ArcCacheDisk {
   fn read(&mut self, buf: &mut [u8; block::BLOCK_USIZE], pos: crate::Size) {
-    todo!()
+    // Case 1: Hit in T1 or T2 (the page is in the cache)
+    if self.t1.contains(&pos) || self.t2.contains(&pos) {
+      #[cfg(feature = "debug")]
+      println!("[CACHE] Hit for block {}", pos);
+      let list_to_update = if self.t1.contains(&pos) { &mut self.t1 } else { &mut self.t2 };
+      self.move_to_t2(list_to_update, pos);
+      let block = self.data_store.get(&pos).expect("Data should exist on hit");
+      buf.copy_from_slice(&*block.data);
+      return;
+    }
+    
+    #[cfg(feature = "debug")]
+    println!("[CACHE] Miss for block {}", pos);
+    // Case 2: Miss, but the page is in a ghost list
+    if self.b1.contains(&pos) {
+      // Adapt p: Increase target size for T1
+      self.p = (self.p + 1).min(self.capacity);
+      self.replace(true);
+    } else if self.b2.contains(&pos) {
+      // Adapt p: Decrease target size for T1
+      self.p = self.p.saturating_sub(1);
+      self.replace(false);
+    } else {
+      // Case 3: Cold miss (page seen for the first time)
+      if self.t1.len() + self.t2.len() >= self.capacity {
+        self.replace(false);
+      }
+    }
+    
+    let mut data = [0u8; block::BLOCK_USIZE];
+    self.disk.read(&mut data, pos);
+    let new_block = CacheBlock { data: Box::new(data), is_dirty: false };
+    self.data_store.insert(pos, new_block);
+    
+    self.t1.push_front(pos);
+    
+    let block = self.data_store.get(&pos).unwrap();
+    buf.copy_from_slice(&*block.data);
   }
   
   fn write(&mut self, buf: &[u8; block::BLOCK_USIZE], pos: crate::Size) {
