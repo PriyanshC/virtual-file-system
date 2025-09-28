@@ -12,7 +12,8 @@ fn main() {
   unsafe {
     /* Initialise a new disk. Alternatively, load an existing one  */
     let _ = std::fs::remove_file(PATH);
-    FILESYS.new_disk(PATH, DISK_BLOCKS, BufferCacheStrategy::None);
+    // FILESYS.new_disk(PATH, DISK_BLOCKS, BufferCacheStrategy::None);
+    FILESYS.new_disk(PATH, DISK_BLOCKS, BufferCacheStrategy::Arc { capacity: 1 });
     FILESYS.init_free_map();
     
     /* File should not already exist */
@@ -32,7 +33,17 @@ fn main() {
     let bytes_written = FILESYS.file_write(&mut file, SAMPLE_DATA, FILE_OFFSET);
     assert_eq!(bytes_written, SAMPLE_DATA.len() as i64);
 
-    /* Read from where we have written into a new buffer */
+    /* Read from where we have written into a new buffer. Repeat multiple times to test cache */
+    file.seek_start();
+    let mut buf = [u8::MAX; SAMPLE_DATA.len()];
+    let bytes_read = FILESYS.file_read(&mut file, &mut buf, FILE_OFFSET);
+    assert_eq!(bytes_read, SAMPLE_DATA.len() as i64);
+
+    file.seek_start();
+    let mut buf = [u8::MAX; SAMPLE_DATA.len()];
+    let bytes_read = FILESYS.file_read(&mut file, &mut buf, FILE_OFFSET);
+    assert_eq!(bytes_read, SAMPLE_DATA.len() as i64);
+
     file.seek_start();
     let mut buf = [u8::MAX; SAMPLE_DATA.len()];
     let bytes_read = FILESYS.file_read(&mut file, &mut buf, FILE_OFFSET);
