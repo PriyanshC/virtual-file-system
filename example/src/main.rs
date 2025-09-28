@@ -61,5 +61,7 @@ fn main() {
     /* Display number of read and write calls to DISK */
     FILESYS.flush_sys();
     FILESYS.display_disk_ops_stats();
+
+    println!("\nStats are for a buffer of size {} Bytes", SAMPLE_DATA.len());
   }
 }
