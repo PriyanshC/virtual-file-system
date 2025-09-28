@@ -26,6 +26,12 @@ pub trait BlockOperations {
   fn read(&mut self, buf: &mut [u8; BLOCK_USIZE], pos: Size);
   fn write(&mut self, buf: &[u8; BLOCK_USIZE], pos: Size);
   fn flush(&mut self) {}
+  fn stats(&mut self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result  {
+    write!(
+      f,
+      "<no data available>"
+    )
+  }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -133,5 +139,16 @@ impl <T: BlockOperations> BlockOperations for CountedBlockOperations<T> {
     fn write(&mut self, buf: &[u8; BLOCK_USIZE], pos: Size) {
       self.write_count += 1;
       self.inner.write(buf, pos);
+    }
+
+    fn stats(&mut self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      write!(
+        f,
+        "Performed {} writes and {} reads. Inner=",
+        self.write_count,
+        self.read_count
+      )?;
+
+      self.inner.stats(f)
     }
 }
