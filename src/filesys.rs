@@ -1,9 +1,9 @@
-use crate::{Ofs, Size};
+use crate::{filesys::vdisk::buffer_cache::ArcCacheDisk, Ofs, Size};
 use block::{BlockManager, DeviceType};
 use directory::Dir;
 use free_map::FreeMap;
 use inode::InodeManager;
-use std::borrow::BorrowMut;
+use std::{borrow::BorrowMut, io::stdout};
 use vdisk::VDisk;
 use vfile::VFile;
 
@@ -18,6 +18,11 @@ pub struct Filesys<'a> {
   inodes: InodeManager,
   block_devs: BlockManager<'a>,
   free_map: Option<FreeMap<'a>>,
+}
+
+pub enum BufferCacheStrategy {
+  None,
+  Arc { capacity: usize },
 }
 
 const ROOT_INODE: Size = 0;
@@ -40,12 +45,21 @@ impl<'a> Filesys<'a> {
     }
   }
 
-  pub fn new_disk(&'a mut self, host_path: &str, disk_block_count: Size) {
-    let vdisk = VDisk::new(host_path, disk_block_count);
-
-    self
-      .block_devs
-      .register("DISK", disk_block_count, vdisk, DeviceType::Disk);
+  pub fn new_disk(&'a mut self, host_path: &str, disk_block_count: Size, cache_strategy: BufferCacheStrategy) {
+    let vdisk = block::CountedBlockOperations::new(VDisk::new(host_path, disk_block_count));
+    match cache_strategy {
+      BufferCacheStrategy::None => {
+        self
+          .block_devs
+          .register("DISK", disk_block_count, vdisk, DeviceType::Disk);
+        },
+        BufferCacheStrategy::Arc { capacity } => {
+          let disk = ArcCacheDisk::new(vdisk, capacity);
+          self
+            .block_devs
+          .register("DISK", disk_block_count, block::CountedBlockOperations::new(disk), DeviceType::Disk);
+        },
+    }
   }
 
   pub fn load_disk(&'a mut self, host_path: &str) {
@@ -149,12 +163,26 @@ impl<'a> Filesys<'a> {
     Misc operations
   */
 
-  pub fn display_disk_stats(&'a mut self) {
+  pub fn display_disk_block_stats(&'a mut self) {
     let disk = self
       .block_devs
       .get_by_role(DeviceType::Disk)
       .expect(NO_DISK_ERR);
 
     println!("{}", disk);
+  }
+
+  pub fn display_disk_ops_stats(&'a mut self) {
+    let disk = self
+      .block_devs
+      .get_by_role(DeviceType::Disk)
+      .expect(NO_DISK_ERR);
+
+
+    println!("{}", disk.stats());
+  }
+
+  pub fn flush_sys(&'a mut self) {
+    self.block_devs.flush_devices();
   }
 }
