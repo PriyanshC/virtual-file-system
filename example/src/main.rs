@@ -13,7 +13,7 @@ fn main() {
     /* Initialise a new disk. Alternatively, load an existing one  */
     let _ = std::fs::remove_file(PATH);
     // FILESYS.new_disk(PATH, DISK_BLOCKS, BufferCacheStrategy::None);
-    FILESYS.new_disk(PATH, DISK_BLOCKS, BufferCacheStrategy::Arc { capacity: 1 });
+    FILESYS.new_disk(PATH, DISK_BLOCKS, BufferCacheStrategy::Arc { capacity: 8 });
     FILESYS.init_free_map();
     
     /* File should not already exist */

@@ -98,3 +98,21 @@ impl fmt::Display for BlockDevice<'_> {
     )
   }
 }
+
+pub struct CountedBlockOperations<T: BlockOperations> {
+  inner: T,
+  read_count: usize,
+  write_count: usize,
+}
+
+impl <T: BlockOperations> BlockOperations for CountedBlockOperations<T> {
+    fn read(&mut self, buf: &mut [u8; BLOCK_USIZE], pos: Size) {
+      self.read_count += 1;
+      self.inner.read(buf, pos);
+    }
+
+    fn write(&mut self, buf: &[u8; BLOCK_USIZE], pos: Size) {
+      self.write_count += 1;
+      self.inner.write(buf, pos);
+    }
+}
