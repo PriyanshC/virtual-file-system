@@ -1,6 +1,8 @@
 use super::block;
 use crate::Size;
 
+mod buffer_cache;
+
 use std::{
   fs::File,
   io::{Read, Seek, Write},
