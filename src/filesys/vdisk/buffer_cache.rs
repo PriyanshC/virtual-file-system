@@ -63,11 +63,19 @@ impl ArcCacheDisk {
   }
   
   /// This is used for promotion on a cache hit.
-  fn move_to_t2(&mut self, list: &mut VecDeque<crate::Size>, pos: crate::Size) {
-    if let Some(index) = list.iter().position(|&p| p == pos) {
-      list.remove(index);
+  fn promote_to_t2(&mut self, pos: crate::Size) {
+    // Remove from T1 if present
+    if let Some(index) = self.t1.iter().position(|&p| p == pos) {
+      self.t1.remove(index);
+      self.t2.push_front(pos);
+      return;
     }
-    self.t2.push_front(pos);
+    
+    // If already in T2, move to front
+    if let Some(index) = self.t2.iter().position(|&p| p == pos) {
+      self.t2.remove(index);
+      self.t2.push_front(pos);
+    }
   }
 }
 
@@ -77,8 +85,7 @@ impl block::BlockOperations for ArcCacheDisk {
     if self.t1.contains(&pos) || self.t2.contains(&pos) {
       #[cfg(feature = "debug")]
       println!("[CACHE] Hit for block {}", pos);
-      let list_to_update = if self.t1.contains(&pos) { &mut self.t1 } else { &mut self.t2 };
-      self.move_to_t2(list_to_update, pos);
+      self.promote_to_t2(pos);
       let block = self.data_store.get(&pos).expect("Data should exist on hit");
       buf.copy_from_slice(&*block.data);
       return;
