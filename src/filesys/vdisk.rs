@@ -1,6 +1,5 @@
 use super::block;
 use crate::Size;
-use super::buffer_cache::BufferCache;
 
 use std::{
   fs::File,
@@ -9,7 +8,6 @@ use std::{
 
 pub struct VDisk {
   host: File,
-  buffer_cache: Option<Box<dyn BufferCache>>,
 }
 
 impl VDisk {
@@ -29,7 +27,7 @@ impl VDisk {
     host
       .set_len(disk_block_count * block::BLOCK_SIZE)
       .expect("unable to set host file size");
-    VDisk { host, buffer_cache: None }
+    VDisk { host }
   }
 
   pub fn identify(host_path: &str) -> (Self, Size) {
@@ -42,7 +40,7 @@ impl VDisk {
     let host_size = host.metadata().expect("unable to query metadata").len();
     assert_eq!(host_size % block::BLOCK_SIZE, 0);
 
-    (VDisk { host, buffer_cache: None }, host_size / block::BLOCK_SIZE)
+    (VDisk { host }, host_size / block::BLOCK_SIZE)
   }
 }
 
