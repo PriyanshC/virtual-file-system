@@ -1,4 +1,4 @@
-use crate::{Ofs, Size};
+use crate::{filesys::vdisk::buffer_cache::ArcCacheDisk, Ofs, Size};
 use block::{BlockManager, DeviceType};
 use directory::Dir;
 use free_map::FreeMap;
@@ -18,6 +18,11 @@ pub struct Filesys<'a> {
   inodes: InodeManager,
   block_devs: BlockManager<'a>,
   free_map: Option<FreeMap<'a>>,
+}
+
+pub enum BufferCacheStrategy {
+  None,
+  Arc { capacity: usize },
 }
 
 const ROOT_INODE: Size = 0;
@@ -40,12 +45,21 @@ impl<'a> Filesys<'a> {
     }
   }
 
-  pub fn new_disk(&'a mut self, host_path: &str, disk_block_count: Size) {
+  pub fn new_disk(&'a mut self, host_path: &str, disk_block_count: Size, cache_strategy: BufferCacheStrategy) {
     let vdisk = VDisk::new(host_path, disk_block_count);
-
-    self
-      .block_devs
-      .register("DISK", disk_block_count, vdisk, DeviceType::Disk);
+    match cache_strategy {
+      BufferCacheStrategy::None => {
+        self
+          .block_devs
+          .register("DISK", disk_block_count, vdisk, DeviceType::Disk);
+        },
+        BufferCacheStrategy::Arc { capacity } => {
+          let disk = ArcCacheDisk::new(vdisk, capacity);
+          self
+            .block_devs
+          .register("DISK", disk_block_count, disk, DeviceType::Disk);
+        },
+    }
   }
 
   pub fn load_disk(&'a mut self, host_path: &str) {

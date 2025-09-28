@@ -1,4 +1,4 @@
-use vfs::filesys::Filesys;
+use vfs::filesys::{Filesys, BufferCacheStrategy};
 
 static mut FILESYS: Filesys = Filesys::init();
 
@@ -12,7 +12,7 @@ fn main() {
   unsafe {
     /* Initialise a new disk. Alternatively, load an existing one  */
     let _ = std::fs::remove_file(PATH);
-    FILESYS.new_disk(PATH, DISK_BLOCKS);
+    FILESYS.new_disk(PATH, DISK_BLOCKS, BufferCacheStrategy::None);
     FILESYS.init_free_map();
     
     /* File should not already exist */
