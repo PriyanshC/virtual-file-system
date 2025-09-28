@@ -46,7 +46,7 @@ impl<'a> Filesys<'a> {
   }
 
   pub fn new_disk(&'a mut self, host_path: &str, disk_block_count: Size, cache_strategy: BufferCacheStrategy) {
-    let vdisk = VDisk::new(host_path, disk_block_count);
+    let vdisk = block::CountedBlockOperations::new(VDisk::new(host_path, disk_block_count));
     match cache_strategy {
       BufferCacheStrategy::None => {
         self
@@ -57,7 +57,7 @@ impl<'a> Filesys<'a> {
           let disk = ArcCacheDisk::new(vdisk, capacity);
           self
             .block_devs
-          .register("DISK", disk_block_count, disk, DeviceType::Disk);
+          .register("DISK", disk_block_count, block::CountedBlockOperations::new(disk), DeviceType::Disk);
         },
     }
   }

@@ -114,6 +114,16 @@ pub struct CountedBlockOperations<T: BlockOperations> {
   write_count: usize,
 }
 
+impl <T: BlockOperations> CountedBlockOperations<T> {
+  pub fn new(ops: T) -> Self {
+    CountedBlockOperations {
+      inner: ops,
+      read_count: 0,
+      write_count: 0,
+    }
+  }
+}
+
 impl <T: BlockOperations> BlockOperations for CountedBlockOperations<T> {
     fn read(&mut self, buf: &mut [u8; BLOCK_USIZE], pos: Size) {
       self.read_count += 1;
