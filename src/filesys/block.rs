@@ -40,7 +40,7 @@ impl<'a> BlockManager<'a> {
     }
   }
 
-  pub fn get_by_role(&'a mut self, role: DeviceType) -> Option<&'a mut BlockDevice> {
+  pub fn get_by_role(&'a mut self, role: DeviceType) -> Option<&'a mut BlockDevice<'a>> {
     assert_ne!(role, DeviceType::MaxCount);
     self.blocks_by_role[role as usize].as_mut()
   }
