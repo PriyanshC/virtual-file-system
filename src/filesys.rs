@@ -171,4 +171,8 @@ impl<'a> Filesys<'a> {
 
     println!("{}", disk);
   }
+
+  pub fn flush_sys(&'a mut self) {
+    self.block_devs.flush_devices();
+  }
 }

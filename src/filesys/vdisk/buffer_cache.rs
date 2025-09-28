@@ -4,10 +4,6 @@ use crate::filesys::block::BlockOperations;
 
 use super::block;
 
-pub trait BufferCacheDisk : block::BlockOperations {
-  fn flush(&mut self);
-}
-
 struct CacheBlock {
   data: Box<[u8; block::BLOCK_USIZE]>,
   is_dirty: bool,
@@ -130,9 +126,7 @@ impl<'a> block::BlockOperations for ArcCacheDisk<'a> {
     block.data.copy_from_slice(buf);
     block.is_dirty = true;
   }
-}
 
-impl<'a> BufferCacheDisk for ArcCacheDisk<'a> {
   fn flush(&mut self) {
     #[cfg(feature = "debug")]
     println!("[CACHE] Flushing all dirty blocks...");

@@ -25,6 +25,7 @@ pub struct BlockDevice<'a> {
 pub trait BlockOperations {
   fn read(&mut self, buf: &mut [u8; BLOCK_USIZE], pos: Size);
   fn write(&mut self, buf: &[u8; BLOCK_USIZE], pos: Size);
+  fn flush(&mut self) {}
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -65,6 +66,14 @@ impl<'a> BlockManager<'a> {
       write_count: 0,
       role,
     })
+  }
+
+  pub fn flush_devices(&'a mut self) {
+    for dev in self.blocks_by_role.iter_mut() {
+      if let Some(dev) = dev {
+        dev.ops.flush();
+      }
+    }
   }
 }
 
