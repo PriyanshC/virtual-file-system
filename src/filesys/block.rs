@@ -166,4 +166,8 @@ impl <T: BlockOperations> BlockOperations for CountedBlockOperations<T> {
       self.inner.stats(f)?;
       write!(f, ")")
     }
+
+    fn flush(&mut self) {
+        self.inner.flush();
+    }
 }

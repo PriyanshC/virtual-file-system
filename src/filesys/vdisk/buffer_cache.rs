@@ -138,6 +138,8 @@ impl<'a> block::BlockOperations for ArcCacheDisk<'a> {
       }
     }
     
+    self.block_device.flush();
+    
     #[cfg(feature = "debug")]
     println!("[CACHE] Flush complete.");
   }
