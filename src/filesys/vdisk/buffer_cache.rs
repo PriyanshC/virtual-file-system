@@ -40,6 +40,33 @@ impl ArcCacheDisk {
       b2: VecDeque::with_capacity(capacity),
     }
   }
+  
+  /// Called when the cache is full and a new page needs to be loaded
+  fn replace(&mut self, is_b1_hit: bool) {
+    if self.t1.len() >= 1 && (is_b1_hit || self.t1.len() > self.p) {
+      // Evict from T1, moving it to the ghost list B1
+      if let Some(pos) = self.t1.pop_back() {
+        println!("[CACHE] Evicting {} from T1 to B1", pos);
+        self.b1.push_front(pos);
+        self.data_store.remove(&pos);
+      }
+    } else {
+      // Evict from T2, moving it to the ghost list B2.
+      if let Some(pos) = self.t2.pop_back() {
+        println!("[CACHE] Evicting {} from T2 to B2", pos);
+        self.b2.push_front(pos);
+        self.data_store.remove(&pos);
+      }
+    }
+  }
+
+  /// This is used for promotion on a cache hit.
+  fn move_to_t2(&mut self, list: &mut VecDeque<crate::Size>, pos: crate::Size) {
+    if let Some(index) = list.iter().position(|&p| p == pos) {
+      list.remove(index);
+    }
+    self.t2.push_front(pos);
+  }
 }
 
 impl block::BlockOperations for ArcCacheDisk {
@@ -63,7 +90,7 @@ impl BufferCacheDisk for ArcCacheDisk {
         block.is_dirty = false;
       }
     }
-
+    
     #[cfg(feature = "debug")]
     println!("[CACHE] Flush complete.");
   }
