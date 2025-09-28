@@ -26,7 +26,7 @@ pub trait BlockOperations {
   fn read(&mut self, buf: &mut [u8; BLOCK_USIZE], pos: Size);
   fn write(&mut self, buf: &[u8; BLOCK_USIZE], pos: Size);
   fn flush(&mut self) {}
-  fn stats(&mut self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result  {
+  fn stats(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result  {
     write!(
       f,
       "<no data available>"
@@ -102,6 +102,19 @@ impl<'a> BlockDevice<'a> {
   pub fn max_size(&self) -> Size {
     self.size
   }
+
+  pub fn stats(&self) -> BlockDeviceStats {
+    BlockDeviceStats { dev: &self }
+  }
+}
+
+pub struct BlockDeviceStats<'a> {
+  dev: &'a BlockDevice<'a>
+}
+impl<'a> fmt::Display for BlockDeviceStats<'a> {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    self.dev.ops.stats(f)
+  }
 }
 
 impl fmt::Display for BlockDevice<'_> {
@@ -141,14 +154,16 @@ impl <T: BlockOperations> BlockOperations for CountedBlockOperations<T> {
       self.inner.write(buf, pos);
     }
 
-    fn stats(&mut self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn stats(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       write!(
         f,
-        "Performed {} writes and {} reads. Inner=",
+        "{} performed {} reads and {} writes.\n(",
+        std::any::type_name::<T>(),
+        self.read_count,
         self.write_count,
-        self.read_count
       )?;
 
-      self.inner.stats(f)
+      self.inner.stats(f)?;
+      write!(f, ")")
     }
 }

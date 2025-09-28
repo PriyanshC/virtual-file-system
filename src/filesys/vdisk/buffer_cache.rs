@@ -141,4 +141,8 @@ impl<'a> block::BlockOperations for ArcCacheDisk<'a> {
     #[cfg(feature = "debug")]
     println!("[CACHE] Flush complete.");
   }
+
+  fn stats(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    self.block_device.stats(f)
+  }
 }

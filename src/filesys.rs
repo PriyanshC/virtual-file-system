@@ -3,7 +3,7 @@ use block::{BlockManager, DeviceType};
 use directory::Dir;
 use free_map::FreeMap;
 use inode::InodeManager;
-use std::borrow::BorrowMut;
+use std::{borrow::BorrowMut, io::stdout};
 use vdisk::VDisk;
 use vfile::VFile;
 
@@ -163,13 +163,23 @@ impl<'a> Filesys<'a> {
     Misc operations
   */
 
-  pub fn display_disk_stats(&'a mut self) {
+  pub fn display_disk_block_stats(&'a mut self) {
     let disk = self
       .block_devs
       .get_by_role(DeviceType::Disk)
       .expect(NO_DISK_ERR);
 
     println!("{}", disk);
+  }
+
+  pub fn display_disk_ops_stats(&'a mut self) {
+    let disk = self
+      .block_devs
+      .get_by_role(DeviceType::Disk)
+      .expect(NO_DISK_ERR);
+
+
+    println!("{}", disk.stats());
   }
 
   pub fn flush_sys(&'a mut self) {

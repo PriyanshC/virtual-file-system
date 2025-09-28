@@ -57,6 +57,7 @@ fn main() {
     assert_eq!(SAMPLE_DATA, buf);
 
     /* Display number of read and write calls to DISK */
-    FILESYS.display_disk_stats();
+    FILESYS.display_disk_block_stats();
+    FILESYS.display_disk_ops_stats();
   }
 }
