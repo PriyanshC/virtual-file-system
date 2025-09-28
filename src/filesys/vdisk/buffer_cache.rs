@@ -77,7 +77,15 @@ impl block::BlockOperations for ArcCacheDisk {
   }
   
   fn write(&mut self, buf: &[u8; block::BLOCK_USIZE], pos: crate::Size) {
-    todo!()
+    let mut temp_buf = [0u8; block::BLOCK_USIZE];
+    self.read(&mut temp_buf, pos);
+    
+    #[cfg(feature = "debug")]
+    println!("[CACHE] Writing data to block {}", pos);
+    
+    let block = self.data_store.get_mut(&pos).expect("Block must be in cache after read");
+    block.data.copy_from_slice(buf);
+    block.is_dirty = true;
   }
 }
 
