@@ -8,6 +8,7 @@ use vdisk::VDisk;
 use vfile::VFile;
 
 mod block;
+mod buffer_cache;
 mod directory;
 mod free_map;
 mod inode;
