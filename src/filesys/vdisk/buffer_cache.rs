@@ -3,7 +3,6 @@ use std::collections::{HashMap, VecDeque};
 use crate::filesys::block::BlockOperations;
 
 use super::block;
-use super::VDisk;
 
 pub trait BufferCacheDisk : block::BlockOperations {
   fn flush(&mut self);
@@ -14,8 +13,8 @@ struct CacheBlock {
   is_dirty: bool,
 }
 
-pub struct ArcCacheDisk {
-  disk: VDisk,
+pub struct ArcCacheDisk<'a> {
+  block_device: Box<dyn block::BlockOperations + 'a>,
   p: usize,
   capacity: usize,
   
@@ -27,10 +26,10 @@ pub struct ArcCacheDisk {
   b2: VecDeque<crate::Size>, // Frequency ghost list
 }
 
-impl ArcCacheDisk {
-  pub fn new(disk: VDisk, capacity: usize) -> Self {
+impl<'a> ArcCacheDisk<'a> {
+  pub fn new<D: BlockOperations + 'a>(disk: D, capacity: usize) -> Self {
     ArcCacheDisk { 
-      disk,
+      block_device: Box::new(disk),
       p: 0,
       capacity: capacity,
       data_store: HashMap::with_capacity(capacity),
@@ -79,7 +78,7 @@ impl ArcCacheDisk {
   }
 }
 
-impl block::BlockOperations for ArcCacheDisk {
+impl<'a> block::BlockOperations for ArcCacheDisk<'a> {
   fn read(&mut self, buf: &mut [u8; block::BLOCK_USIZE], pos: crate::Size) {
     // Case 1: Hit in T1 or T2 (the page is in the cache)
     if self.t1.contains(&pos) || self.t2.contains(&pos) {
@@ -110,7 +109,7 @@ impl block::BlockOperations for ArcCacheDisk {
     }
     
     let mut data = [0u8; block::BLOCK_USIZE];
-    self.disk.read(&mut data, pos);
+    self.block_device.read(&mut data, pos);
     let new_block = CacheBlock { data: Box::new(data), is_dirty: false };
     self.data_store.insert(pos, new_block);
     
@@ -133,14 +132,14 @@ impl block::BlockOperations for ArcCacheDisk {
   }
 }
 
-impl BufferCacheDisk for ArcCacheDisk {
+impl<'a> BufferCacheDisk for ArcCacheDisk<'a> {
   fn flush(&mut self) {
     #[cfg(feature = "debug")]
     println!("[CACHE] Flushing all dirty blocks...");
     
     for (pos, block) in self.data_store.iter_mut() {
       if block.is_dirty {
-        self.disk.write(&block.data, *pos);
+        self.block_device.write(&block.data, *pos);
         block.is_dirty = false;
       }
     }
