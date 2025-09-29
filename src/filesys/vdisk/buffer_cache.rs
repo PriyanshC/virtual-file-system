@@ -145,9 +145,21 @@ impl<'a> block::BlockOperations for ArcCacheDisk<'a> {
       _ => unreachable!(),
     };
     
-    // TODO
+    self.block_device.read(buf, pos);
     
+    // Ghost hits are "frequent", cold misses are just "recent"
+    let add_to_list = if let Some(BlockLocation::B1 | BlockLocation::B2) = location {
+      BlockLocation::T2
+    } else {
+      BlockLocation::T1
+    };
     
+    self.add_to_mru(&pos, add_to_list);
+    let new_block = CacheBlock {
+      data: *buf,
+      is_dirty: false,
+    };
+    self.data_store.insert(pos, new_block);
   }
   
   fn write(&mut self, buf: &[u8; block::BLOCK_USIZE], pos: crate::Size) {
