@@ -149,6 +149,17 @@ impl<'a> block::BlockOperations for ArcCacheDisk<'a> {
   }
   
   fn stats(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let dirty_count = self.data_store.values().filter(|b| b.is_dirty).count();
+    writeln!(f, "--- ARC Cache Stats ---")?;
+    writeln!(f, "Capacity: {} blocks", self.capacity)?;
+    writeln!(f, "Target (p): {}", self.p)?;
+    writeln!(f, "T1 (Recent): {} blocks", self.t1.len())?;
+    writeln!(f, "T2 (Frequent): {} blocks", self.t2.len())?;
+    writeln!(f, "B1 (Ghost Recent): {} blocks", self.b1.len())?;
+    writeln!(f, "B2 (Ghost Frequent): {} blocks", self.b2.len())?;
+    writeln!(f, "Total Resident: {}", self.data_store.len())?;
+    writeln!(f, "Dirty Blocks: {}", dirty_count)?;
+    writeln!(f, "--- Underlying Device Stats ---")?;
     self.block_device.stats(f)
   }
 }
