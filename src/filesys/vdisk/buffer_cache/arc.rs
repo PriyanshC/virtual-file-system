@@ -1,3 +1,6 @@
+/// An interpretation of the ARC: A Self-Tuning, Low Overhead Replacement Cache
+/// 2003 paper by Nimrod Megiddo and Dharmendra S. Modha
+
 use std::collections::{HashMap, VecDeque};
 
 use crate::filesys::block::BlockOperations;
