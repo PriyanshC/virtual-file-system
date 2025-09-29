@@ -78,7 +78,29 @@ impl<'a> ArcCacheDisk<'a> {
   }
   
   fn evict(&mut self) {
+    debug_assert!(!(self.t1.len() == 0 && self.t2.len() == 0));
     
+    let evict_from_t1 = self.t1.len() > 0 && (self.t1.len() > self.p || (self.t2.is_empty()));
+    
+    let (evicted_pos, ghost_list_loc) = if evict_from_t1 {
+      (self.t1.pop_front().unwrap(), BlockLocation::B1)
+    } else {
+      (self.t2.pop_front().unwrap(), BlockLocation::B2)
+    };
+    
+    if let Some(block) = self.data_store.get(&evicted_pos) {
+      if block.is_dirty {
+        self.block_device.write(&block.data, evicted_pos);
+      }
+    }
+    
+    self.data_store.remove(&evicted_pos);
+    self.page_map.insert(evicted_pos, ghost_list_loc);
+    match ghost_list_loc {
+      BlockLocation::B1 => self.b1.push_back(evicted_pos),
+      BlockLocation::B2 => self.b2.push_back(evicted_pos),
+      _ => unreachable!(),
+    }
   }
 }
 
@@ -93,39 +115,39 @@ impl<'a> block::BlockOperations for ArcCacheDisk<'a> {
         return;
       }
     };
-
-
+    
+    
     match location {
-        Some(BlockLocation::B1) => {
-                self.remove_from_list(&pos, BlockLocation::B1);
-
-                // Adapt p: Increase target size for T1, as this block might be useful.
-                let delta = if self.b2.len() >= self.b1.len() { 1 } else { self.b1.len() / self.b2.len() };
-                self.p = (self.p + delta).min(self.capacity);
-                
-                self.evict();
-        },
-        Some(BlockLocation::B2) => {
-                self.remove_from_list(&pos, BlockLocation::B2);
-
-                // Adapt p: Decrease target size for T1, favoring the frequent list.
-                let delta = if self.b1.len() >= self.b2.len() { 1 } else { self.b2.len() / self.b1.len() };
-                self.p = self.p.saturating_sub(delta);
-
-                self.evict();
-        },
-        None => {
-          // Cold miss
-          if self.t1.len() + self.t2.len() >= self.capacity {
-              self.evict();
-          }
-        },
-        _ => unreachable!(),
+      Some(BlockLocation::B1) => {
+        self.remove_from_list(&pos, BlockLocation::B1);
+        
+        // Adapt p: Increase target size for T1, as this block might be useful.
+        let delta = if self.b2.len() >= self.b1.len() { 1 } else { self.b1.len() / self.b2.len() };
+        self.p = (self.p + delta).min(self.capacity);
+        
+        self.evict();
+      },
+      Some(BlockLocation::B2) => {
+        self.remove_from_list(&pos, BlockLocation::B2);
+        
+        // Adapt p: Decrease target size for T1, favoring the frequent list.
+        let delta = if self.b1.len() >= self.b2.len() { 1 } else { self.b2.len() / self.b1.len() };
+        self.p = self.p.saturating_sub(delta);
+        
+        self.evict();
+      },
+      None => {
+        // Cold miss
+        if self.t1.len() + self.t2.len() >= self.capacity {
+          self.evict();
+        }
+      },
+      _ => unreachable!(),
     };
-
+    
     // TODO
-
-
+    
+    
   }
   
   fn write(&mut self, buf: &[u8; block::BLOCK_USIZE], pos: crate::Size) {
