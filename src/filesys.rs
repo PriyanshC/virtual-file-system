@@ -3,7 +3,7 @@ use block::{BlockManager, DeviceType};
 use directory::Dir;
 use free_map::FreeMap;
 use inode::InodeManager;
-use std::{borrow::BorrowMut, io::stdout};
+use std::{borrow::BorrowMut};
 use vdisk::VDisk;
 use vfile::VFile;
 
