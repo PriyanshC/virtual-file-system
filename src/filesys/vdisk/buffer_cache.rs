@@ -84,6 +84,48 @@ impl<'a> ArcCacheDisk<'a> {
 
 impl<'a> block::BlockOperations for ArcCacheDisk<'a> {
   fn read(&mut self, buf: &mut [u8; block::BLOCK_USIZE], pos: crate::Size) {
+    let location = self.page_map.get(&pos).copied();
+    if let Some(loc) = location {
+      // Cache hit
+      if loc == BlockLocation::T1 || loc == BlockLocation::T2 {
+        self.move_page(&pos, loc, BlockLocation::T2);
+        buf.copy_from_slice(&self.data_store[&pos].data);
+        return;
+      }
+    };
+
+
+    match location {
+        Some(BlockLocation::B1) => {
+                self.remove_from_list(&pos, BlockLocation::B1);
+
+                // Adapt p: Increase target size for T1, as this block might be useful.
+                let delta = if self.b2.len() >= self.b1.len() { 1 } else { self.b1.len() / self.b2.len() };
+                self.p = (self.p + delta).min(self.capacity);
+                
+                self.evict();
+        },
+        Some(BlockLocation::B2) => {
+                self.remove_from_list(&pos, BlockLocation::B2);
+
+                // Adapt p: Decrease target size for T1, favoring the frequent list.
+                let delta = if self.b1.len() >= self.b2.len() { 1 } else { self.b2.len() / self.b1.len() };
+                self.p = self.p.saturating_sub(delta);
+
+                self.evict();
+        },
+        None => {
+          // Cold miss
+          if self.t1.len() + self.t2.len() >= self.capacity {
+              self.evict();
+          }
+        },
+        _ => unreachable!(),
+    };
+
+    // TODO
+
+
   }
   
   fn write(&mut self, buf: &[u8; block::BLOCK_USIZE], pos: crate::Size) {
