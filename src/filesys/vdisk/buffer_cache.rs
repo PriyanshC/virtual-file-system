@@ -95,21 +95,47 @@ impl<'a> block::BlockOperations for ArcCacheDisk<'a> {
       // Promote to MRU of T2
       let location = self.page_map.get(&pos).copied().unwrap();
       self.move_page(&pos, location, BlockLocation::T2);
-    } else {
-      // Miss
-
-      if self.t1.len() + self.t2.len() >= self.capacity {
-        self.evict();
-      }
-      
-      // Restore into T1
-      self.add_to_mru(&pos, BlockLocation::T1);
-      let new_block = CacheBlock {
-        data: *buf,
-        is_dirty: true,
-      };
-      self.data_store.insert(pos, new_block);
+      return;
     }
+    // Miss
+    
+    let location = self.page_map.get(&pos).copied();
+    match location {
+      Some(BlockLocation::B1) => {
+        let delta = if self.b2.len() >= self.b1.len() { 1 } else { self.b1.len() / self.b2.len() };
+        self.p = (self.p + delta).min(self.capacity);
+        self.evict();
+        self.remove_from_list(&pos, BlockLocation::B1);
+      },
+      Some(BlockLocation::B2) => {
+        let delta = if self.b1.len() >= self.b2.len() { 1 } else { self.b2.len() / self.b1.len() };
+        self.p = self.p.saturating_sub(delta);
+        self.evict();
+        self.remove_from_list(&pos, BlockLocation::B2);
+      },
+      None => {
+        // Cold miss
+        if self.t1.len() + self.t2.len() >= self.capacity {
+          self.evict();
+        }
+      }
+      _ => unreachable!(),
+    };
+    
+    
+    // Ghost hits get added to T2; cold misses to T1
+    let add_to_list = if let Some(BlockLocation::B1 | BlockLocation::B2) = location {
+      BlockLocation::T2
+    } else {
+      BlockLocation::T1
+    };
+    
+    self.add_to_mru(&pos, add_to_list);
+    let new_block = CacheBlock {
+      data: *buf,
+      is_dirty: true,
+    };
+    self.data_store.insert(pos, new_block);
   }
   
   fn flush(&mut self) {
